@@ -3,17 +3,19 @@
 #  nodes on stdout, w/o using temp files.
 
 import paramiko
+import select
+import time
 
 class SshProc:
     ssh = None
+    channel = None
     stdout = None
     sdterr = None
     id     = None
 
-    def __init__(self, sshp, stdoutp, stderrp, id):
+    def __init__(self, sshp, channelp, id):
         self.ssh    = sshp
-        self.stdout = stdoutp
-        self.stderr = stderrp
+        self.channel = channelp
         self.id     = id
 
 
@@ -22,16 +24,17 @@ nodes = ["127.0.0.1", "127.0.0.1"]
 username = 'tomcat'
 password = 'tomcat'
 
-cmd = "ls -la /"
+#cmd = "ls -la /"
 
-#cmd =  "ping 8.8.8.8  -c 20 -i 5"
+cmd =  "ping 8.8.8.8  -c 20 -i 5"
 
-ssh = paramiko.SSHClient()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
 
 sshs = []
 
 for n in nodes:
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(hostname=n,
             password=password,
             username=username)
@@ -41,8 +44,9 @@ print("Connected")
 sps=[]
 id = 0;
 for ssh in sshs:
-    stdin, stdout, stderr = ssh.exec_command(cmd)
-    sp =  SshProc( ssh, stdout, stderr, id)
+    channel = ssh.get_transport().open_session()
+    channel.exec_command(cmd)
+    sp = SshProc(ssh, channel, id)
     sps.append(sp);
     id += 1
 
@@ -53,18 +57,30 @@ completed = False
 while not completed:
     read_done = False
     for sshproc in sps:
-        stdout_line = sshproc.stdout.readline()
-        if(stdout_line):
-            print(str(sshproc.id) +"stdout:" + stdout_line)
+
+        if not sshproc.channel.exit_status_ready():
+            completed = False
+
+        rl, wl, xl = select.select([channel], [], [], 0.0)
+
+        if len(rl) > 0:
+            print( str(sshproc.id) +" stdout:" + channel.recv(1024).decode('utf8'))
             read_done = True
 
-        stderr_line = sshproc.stderr.readline()
-        if(stderr_line):
-            print(str(sshproc.id) +"stderr:" + stderr_line)
-            read_done = True
+#    if not read_done:
+#        time.sleep(1)
 
-    if not read_done:
-        completed = True
+#        if sshproc.channel.recv_ready():
+#            stdout = channel.makefile()
+#            stdout_line = stdout.readline()
+#            print(str(sshproc.id) +"stdout:" + stdout_line)
+
+#        if sshproc.channel.recv_stderr_ready():
+#            stderr = channel.makefile_stderr()
+#            stderr_line = stderr.readline()
+#            print(str(sshproc.id) +"stderr:" + stderr_line)
+
+
 
 
 
