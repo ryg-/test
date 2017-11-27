@@ -26,7 +26,7 @@ password = 'tomcat'
 
 #cmd = "ls -la /"
 
-cmd =  "ping 8.8.8.8  -c 20 -i 5"
+cmd =  "ping 8.8.8.8  -c 5 -i 5"
 
 
 
@@ -56,33 +56,27 @@ print("Observing")
 completed = False
 while not completed:
     read_done = False
+    completed = True
     for sshproc in sps:
-
         if not sshproc.channel.exit_status_ready():
             completed = False
+            rl, wl, xl = select.select([sshproc.channel], [], [], 0.0)
 
-        rl, wl, xl = select.select([channel], [], [], 0.0)
+            if len(rl) > 0:
+                print(str(sshproc.id) +" stdout:" + sshproc.channel.recv(1024).decode('utf8'))
+                read_done = True
 
-        if len(rl) > 0:
-            print( str(sshproc.id) +" stdout:" + channel.recv(1024).decode('utf8'))
-            read_done = True
+            if sshproc.channel.recv_stderr_ready():
+                print(str(sshproc.id) +" stderr:" + sshproc.channel.recv_stderr.recv(1024).decode('utf8'))
+                read_done = True
+        else:
+            print("Ssh id=" + str(sshproc.id) + " ended")
 
-#    if not read_done:
-#        time.sleep(1)
+    #sleep if buffer was empty
+    if not read_done:
+        time.sleep(1)
 
-#        if sshproc.channel.recv_ready():
-#            stdout = channel.makefile()
-#            stdout_line = stdout.readline()
-#            print(str(sshproc.id) +"stdout:" + stdout_line)
-
-#        if sshproc.channel.recv_stderr_ready():
-#            stderr = channel.makefile_stderr()
-#            stderr_line = stderr.readline()
-#            print(str(sshproc.id) +"stderr:" + stderr_line)
-
-
-
-
-
+for ssh in sshs:
+    ssh.close()
 
 
